@@ -8,11 +8,13 @@ import android.support.v7.app.ActionBarActivity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.CheckBox;
 import android.widget.ExpandableListAdapter;
 import android.widget.ExpandableListView;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
 
+import java.io.File;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -80,13 +82,16 @@ public class SelectPartitionActivity extends ActionBarActivity {
     public void installAndroid(View view){
         final Handler handler = new Handler();
 
-        final boolean formatPartition = false;
-        final boolean installGrub = true;
+        final boolean formatPartition = ((CheckBox)findViewById(R.id.formatPartitionCheckBox)).isChecked();
+        final boolean installGrub = ((CheckBox)findViewById(R.id.installBootloaderCheckBox)).isChecked();
         final boolean isISOFile = localIsoURI.toUpperCase().endsWith(".ISO");
 
         final Runnable installTask = new Runnable() {
             @Override
             public void run() {
+                DiskPartition diskPartition = DiskPartition.createFromBlockDeviceName(targetPartition);
+
+                final File temporaryDownloadFile = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
                 StringBuilder outputBuiler = new StringBuilder();
 
                 try {
@@ -102,7 +107,7 @@ public class SelectPartitionActivity extends ActionBarActivity {
 
                     if (formatPartition) {
                         updateInstallProgress(handler, outputBuiler, "Formatting partition: " + targetPartition);
-                        installService.formatPartition(targetPartition);
+                        installService.formatPartition(diskPartition);
                     }
                     updateInstallProgress(handler, outputBuiler, "Mounting partition: " + targetPartition);
                     installService.mountPartition(targetPartition);
@@ -110,20 +115,21 @@ public class SelectPartitionActivity extends ActionBarActivity {
                     installService.installOnPartition(androidVersion, targetPartition);
                     updateInstallProgress(handler, outputBuiler, "Unmounting installation media");
                     installService.unmountInstallationMedia();
-                    updateInstallProgress(handler, outputBuiler, "Expand System.img on disk for rooted and rw access");
+                    updateInstallProgress(handler, outputBuiler, "Expanding System.img on disk for read/write and root access");
                     installService.expandSystemOnDisk(androidVersion);
-                    updateInstallProgress(handler, outputBuiler, "Copy GRUB Bootloader file under /grub/ on partition " + targetPartition);
-                    installService.installGrubFiles(getAssets(), Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), targetPartition);
+                    updateInstallProgress(handler, outputBuiler, "Copying GRUB Bootloader file under /boot/grub/ on partition " + targetPartition);
+                    installService.copyGrub2FilesOnPartition(androidVersion, getAssets(), temporaryDownloadFile, diskPartition);
                     if (installGrub) {
                         updateInstallProgress(handler, outputBuiler, "Install GRUB Bootloader on MBR: " + targetPartition);
-                        installService.installBootloader();
+                        installService.installBootloader(diskPartition);
                     }
                     //updateInstallProgress(handler, outputBuiler, "Unmounting partition: "+targetPartition);
                     //installService.unmountPartition(targetPartition);
                     updateInstallProgress(handler, outputBuiler, "Installation finished");
                 }
                 catch(RuntimeException exception){
-                    updateInstallProgress(handler, outputBuiler, "Installation failed! "+exception.getMessage());
+                    updateInstallProgress(handler, outputBuiler, "Installation failed! "+exception.toString());
+                    //throw exception;
                 }
             }
         };
@@ -148,7 +154,7 @@ public class SelectPartitionActivity extends ActionBarActivity {
             String[] line = partition.split("\\s+");
             String size = line[3];
             String name = line[4];
-            if (!Character.isDigit(name.charAt(name.length() - 1))) {
+            if (Disk.isDisk(name)) {
                 //disk name
                 Map<String, String> viewItem = new HashMap<>();
                 viewItem.put("diskname", name);
@@ -156,7 +162,7 @@ public class SelectPartitionActivity extends ActionBarActivity {
                 currentDiskPartitions = new ArrayList<>();
                 partitionsList.add(currentDiskPartitions);
             }
-            else if (currentDiskPartitions != null){
+            else if (currentDiskPartitions != null && DiskPartition.isDiskPartition(name)){
                 //partition name
                 Map<String, String> viewItem = new HashMap<>();
                 viewItem.put("titre", name);

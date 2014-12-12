@@ -26,11 +26,26 @@
             android:choiceMode="singleChoice"
             android:listSelector="@color/pressed_color"/>
 
+        <CheckBox
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Format Partition (erase all data!)"
+            android:id="@+id/formatPartitionCheckBox"
+            android:checked="false" />
+
+        <CheckBox
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Install Bootloader"
+            android:id="@+id/installBootloaderCheckBox"
+            android:checked="true" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="fill_parent"
             android:text=""
             android:id="@+id/install_output" />
+
     </LinearLayout>
 
     <Button
@@ -40,7 +55,7 @@
         android:elevation="1dip"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Install"
+        android:text="Let's Go"
         android:id="@+id/install_button"
         android:enabled="false"
         android:onClick="installAndroid"/>
