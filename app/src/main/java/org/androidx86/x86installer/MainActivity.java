@@ -126,8 +126,12 @@ public class MainActivity extends ActionBarActivity {
         isoFileListView = (ListView) findViewById(R.id.isoFileslistView);
 
         InstallService installService = new InstallService();
+        final File dowloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        // Directory /storage/emulated/legacy points to /mnt/shell/emulated/0 instead of expected
+        // directory /storage/emulated/0.
+        String correctedX86DownloadDir = dowloadDir.getAbsoluteFile().getAbsolutePath().replaceFirst("/0/", "/legacy/");
         final List<InstallMedia> installMedias =
-                installService.listInstallMedias(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
+                installService.listInstallMedias(new File(correctedX86DownloadDir));
 
         InstallMediaListViewAdapter isoFileItemAdapter = new InstallMediaListViewAdapter(this,
                 R.layout.isofileitem, R.id.title,

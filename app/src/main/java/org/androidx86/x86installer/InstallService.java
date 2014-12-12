@@ -79,7 +79,7 @@ public class InstallService {
     public void remountRootFsAsReadWrite(){
         //mount -o remount,rw /
         suCommand("mount -o remount,rw /");
-        suCommand("mkdir "+getCdrom());
+        suCommand("mkdir -p "+getCdrom());
     }
 
     private String getCdrom(){
@@ -92,6 +92,7 @@ public class InstallService {
     public boolean tryMountCdrom(){
         remountRootFsAsReadWrite();
         //mount -t iso9660 -r /dev/block/sr0
+        unmountInstallationMedia();
         String output = suCommand("mount -t iso9660 -r "+cdromDevice+" "+getCdrom());
         return output.isEmpty();
     }
@@ -99,12 +100,13 @@ public class InstallService {
     public void mountIsoFile(String isoFile){
         remountRootFsAsReadWrite();
         //mount -t iso9660 -o ro,loop /storage/sdcard0/Download/Android-x86-xx.iso
-        suCommand("losetup -d /dev/block/loop0");
+        unmountInstallationMedia();
+        suCommand("losetup -d /dev/block/loop0", true);
         suCommand("mount -t iso9660 -o ro,loop "+isoFile+" "+getCdrom());
     }
 
     public void unmountInstallationMedia(){
-        suCommand("umount "+getCdrom());
+        suCommand("umount "+getCdrom(), true);
     }
 
     private String getBlockDevice(String partition){
@@ -114,15 +116,20 @@ public class InstallService {
     public void mountPartition(String targetPartition) {
         final String targetBlockDevice = getBlockDevice(targetPartition);
         remountRootFsAsReadWrite();
-        suCommand("mkdir /hd");
-        mountPartiton(targetBlockDevice);
+        suCommand("mkdir -p /hd");
+        unmountBlockDevice("/hd");
+        mountBlockDevice(targetBlockDevice, "/hd");
+    }
+
+    public void unmountPartition(String targetPartition) {
+        unmountBlockDevice("/hd");
     }
 
     public void installOnPartition(String releaseVersion, String targetPartition) {
        final String installDirectory = "/hd/"+releaseVersion;
        final String dataDirectory = installDirectory+"/data";
-       suCommand("mkdir "+installDirectory);
-       suCommand("mkdir "+dataDirectory);
+       suCommand("mkdir -p "+installDirectory);
+       suCommand("mkdir -p "+dataDirectory);
        suCommand("cp "+getCdrom()+"/kernel"+" "+installDirectory);
        suCommand("cp "+getCdrom()+"/initrd.img"+" "+installDirectory);
        suCommand("cp "+getCdrom()+"/ramdisk.img"+" "+installDirectory);
@@ -133,29 +140,38 @@ public class InstallService {
         final String installDirectory = "/hd/"+releaseVersion;
         final String systemDirectory = installDirectory+"/system";
         final String tmpDirectory = "/hd/tmp";
-        suCommand("mkdir "+systemDirectory);
-        suCommand("mkdir "+tmpDirectory);
+        suCommand("mkdir -p "+systemDirectory);
+        suCommand("mkdir -p "+tmpDirectory);
         //losetup -f
         //losetup -d /dev/block/loop0
-        suCommand("losetup -d /dev/block/loop0");
+        suCommand("losetup -d /dev/block/loop0", true);
         //mount -t squashfs -o,loop /hd/system.sfs /hd/tmp
-        suCommand("mount -t squashfs -o,loop /hd/system.sfs "+tmpDirectory);
+        suCommand("mount -t squashfs -o,loop "+installDirectory+"/system.sfs "+tmpDirectory);
         suCommand("cp "+tmpDirectory+"/system.img "+installDirectory);
         suCommand("umount "+tmpDirectory);
-        suCommand("losetup -d /dev/block/loop0");
+        suCommand("losetup -d /dev/block/loop0", true);
 
         suCommand("mount -t ext4 -o,loop "+installDirectory+"/system.img /hd/tmp");
         suCommand("cp -R /hd/tmp/* "+systemDirectory);
         suCommand("umount "+tmpDirectory);
-        suCommand("losetup -d /dev/block/loop0");
+        suCommand("losetup -d /dev/block/loop0", true);
+
+        suCommand("rm -Rf "+tmpDirectory);
+        suCommand("rm -f "+installDirectory+"/system.sfs");
+        suCommand("rm -f "+installDirectory+"/system.img");
     }
 
-    private String mountPartiton(String targetBlockDevice) {
+    private void unmountBlockDevice(String directory) {
+        //umount /hd
+        suCommand("umount "+directory, true);
+    }
+
+    private void mountBlockDevice(String targetBlockDevice, String directory) {
         //mount -t ext2 targetBlockDevice /hd
-        return suCommand("mount -t ext2 "+targetBlockDevice+" /hd");
+        suCommand("mount -t ext2 "+targetBlockDevice+" "+directory);
     }
 
-    public String formatPartition(String targetPartition) {
+    public void formatPartition(String targetPartition) {
         final String targetBlockDevice = getBlockDevice(targetPartition);
         //fdisk: 'n' creates new partitions, 'd' delete partition, 'p' print partitions, 'q' quit, 'w' write and quit.
         //suCommand("echo -e \"p\\nq\\n\" | fdisk "+targetBlockDevice);
@@ -165,12 +181,12 @@ public class InstallService {
         //fat32: newfs_msdos -L
         //exfat?
         //btrfs:?
-        return suCommand("mke2fs -L AndroidX86 "+targetBlockDevice);
+        suCommand("mke2fs -L AndroidX86 "+targetBlockDevice);
     }
 
     public void installGrubFiles(AssetManager assetManager, File downloadDirectory, String targetPartition) {
         //mkdir /hd/grub
-        suCommand("mkdir /hd/grub");
+        suCommand("mkdir -p /hd/grub");
         //touch /hd/grub/menu.lst
         suCommand("touch /hd/grub/menu.lst");
 
@@ -179,10 +195,11 @@ public class InstallService {
         directory.mkdir();
         extractAssetFileInDirectory(assetManager, directory, "e2fs_stage1_5");
         extractAssetFileInDirectory(assetManager, directory, "fat_stage1_5");
-        extractAssetFileInDirectory(assetManager, directory, "grub");
         extractAssetFileInDirectory(assetManager, directory, "ntfs_stage1_5");
         extractAssetFileInDirectory(assetManager, directory, "stage1");
         extractAssetFileInDirectory(assetManager, directory, "stage2");
+        //grub don't works as it need libc6 (would need as bionic build of grub...)
+        //extractAssetFileInDirectory(assetManager, directory, "grub");
 
         //chmod a+x /hd/grub
         suCommand("cp -R /sdcard/Download/grub/* /hd/grub/");
@@ -212,23 +229,36 @@ public class InstallService {
     }
 
     private String suCommand(String command){
-        String commandOutput = "";
+        return suCommand(command, false);
+    }
+
+    private String suCommand(String command, boolean ignoreError){
+        StringBuilder output = new StringBuilder();
+        StringBuilder error = new StringBuilder();
+
         try {
             Process process = Runtime.getRuntime().exec(new String[]{"su","-c",command});
-            BufferedReader bufferedReader = new BufferedReader(
+            BufferedReader inputStreamReader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()));
+            BufferedReader errorStreamReader = new BufferedReader(
+                    new InputStreamReader(process.getErrorStream()));
 
-            StringBuilder output = new StringBuilder();
             String line;
-            while ((line = bufferedReader.readLine()) != null) {
+            while ((line = inputStreamReader.readLine()) != null) {
                 output.append(line + "\n");
             }
 
-            commandOutput = output.toString();
+            String errorLine;
+            while ((errorLine = errorStreamReader.readLine()) != null) {
+                error.append(errorLine + "\n");
+            }
         }catch (IOException exception){
             throw new RuntimeException("Failed to execute command '"+command+"' as root: "+exception.getMessage());
         }
-        return commandOutput;
+        if (!ignoreError && error.length() > 0){
+            throw new RuntimeException("Failed to execute command '"+command+"' as root. Error: "+error.toString());
+        }
+        return output.toString();
     }
 
     private void extractAssetFileInDirectory(AssetManager assetManager, File outputDirectory, String assetFilename){
@@ -257,5 +287,6 @@ public class InstallService {
             out.write(buffer, 0, read);
         }
     }
+
 
 }

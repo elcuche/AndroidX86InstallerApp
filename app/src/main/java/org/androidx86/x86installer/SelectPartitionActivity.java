@@ -89,37 +89,42 @@ public class SelectPartitionActivity extends ActionBarActivity {
             public void run() {
                 StringBuilder outputBuiler = new StringBuilder();
 
+                try {
+                    InstallService installService = new InstallService();
+                    String androidVersion = "android-x86";
+                    updateInstallProgress(handler, outputBuiler, "Mounting installation media: " + localIsoURI);
+                    if (isISOFile) {
+                        androidVersion = localIsoURI.substring(localIsoURI.lastIndexOf("/") + 1, localIsoURI.length() - 4);
+                        installService.mountIsoFile(localIsoURI);
+                    } else {
+                        installService.tryMountCdrom();
+                    }
 
-                InstallService installService = new InstallService();
-                String androidVersion = "android-x86";
-                updateInstallProgress(handler, outputBuiler, "Mounting installation media: " + localIsoURI);
-                if (isISOFile) {
-                    androidVersion = localIsoURI.substring(localIsoURI.lastIndexOf("/") + 1, localIsoURI.length() - 4);
-                    installService.mountIsoFile(localIsoURI);
+                    if (formatPartition) {
+                        updateInstallProgress(handler, outputBuiler, "Formatting partition: " + targetPartition);
+                        installService.formatPartition(targetPartition);
+                    }
+                    updateInstallProgress(handler, outputBuiler, "Mounting partition: " + targetPartition);
+                    installService.mountPartition(targetPartition);
+                    updateInstallProgress(handler, outputBuiler, "Installing on partition: " + targetPartition);
+                    installService.installOnPartition(androidVersion, targetPartition);
+                    updateInstallProgress(handler, outputBuiler, "Unmounting installation media");
+                    installService.unmountInstallationMedia();
+                    updateInstallProgress(handler, outputBuiler, "Expand System.img on disk for rooted and rw access");
+                    installService.expandSystemOnDisk(androidVersion);
+                    updateInstallProgress(handler, outputBuiler, "Copy GRUB Bootloader file under /grub/ on partition " + targetPartition);
+                    installService.installGrubFiles(getAssets(), Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), targetPartition);
+                    if (installGrub) {
+                        updateInstallProgress(handler, outputBuiler, "Install GRUB Bootloader on MBR: " + targetPartition);
+                        installService.installBootloader();
+                    }
+                    //updateInstallProgress(handler, outputBuiler, "Unmounting partition: "+targetPartition);
+                    //installService.unmountPartition(targetPartition);
+                    updateInstallProgress(handler, outputBuiler, "Installation finished");
                 }
-                else {
-                    installService.tryMountCdrom();
+                catch(RuntimeException exception){
+                    updateInstallProgress(handler, outputBuiler, "Installation failed! "+exception.getMessage());
                 }
-
-                if (formatPartition){
-                    updateInstallProgress(handler, outputBuiler, "Formatting partition: "+targetPartition);
-                    installService.formatPartition(targetPartition);
-                }
-                updateInstallProgress(handler, outputBuiler, "Mounting partition: " + targetPartition);
-                installService.mountPartition(targetPartition);
-                updateInstallProgress(handler, outputBuiler, "Installing on partition: " + targetPartition);
-                installService.installOnPartition(androidVersion, targetPartition);
-                updateInstallProgress(handler, outputBuiler, "Unmounting installation media");
-                installService.unmountInstallationMedia();
-                updateInstallProgress(handler, outputBuiler, "Expand System.img on disk for rooted and rw access");
-                installService.expandSystemOnDisk(androidVersion);
-                updateInstallProgress(handler, outputBuiler, "Copy GRUB Bootloader file under /grub/ on partition " + targetPartition);
-                installService.installGrubFiles(getAssets(), Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), targetPartition);
-                if (installGrub) {
-                    updateInstallProgress(handler, outputBuiler, "Install GRUB Bootloader on MBR: " + targetPartition);
-                    installService.installBootloader();
-                }
-                updateInstallProgress(handler, outputBuiler, "Installation finished");
             }
         };
         new Thread(installTask).start();
