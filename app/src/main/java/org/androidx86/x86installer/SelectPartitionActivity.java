@@ -1,29 +1,19 @@
 package org.androidx86.x86installer;
 
 import android.content.Intent;
+import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.support.v7.app.ActionBarActivity;
-import android.support.v7.app.ActionBar;
-import android.support.v4.app.Fragment;
-import android.os.Bundle;
-import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup;
-import android.os.Build;
-import android.widget.AdapterView;
 import android.widget.ExpandableListAdapter;
 import android.widget.ExpandableListView;
-import android.widget.ListView;
-import android.widget.SimpleAdapter;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
 
-import java.io.File;
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -54,8 +44,8 @@ public class SelectPartitionActivity extends ActionBarActivity {
                 if (selectedPartition != null) {
                     targetPartition = selectedPartition.get("titre");
 
-                    partitionslistView.setSelected(true);
-                    partitionslistView.setSelectedChild(groupPos, childPos, true);
+                    view.setSelected(true);
+                    //partitionslistView.setSelectedChild(groupPos, childPos, true);
                     findViewById(R.id.install_button).setEnabled(true);
                     return true;
                 }

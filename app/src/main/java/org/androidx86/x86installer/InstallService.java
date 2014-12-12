@@ -1,7 +1,6 @@
 package org.androidx86.x86installer;
 
 import android.content.res.AssetManager;
-import android.view.View;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -11,33 +10,28 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.Writer;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class InstallService {
     private final String cdromDevice = "/dev/block/sr0";
 
-    public List<Map<String, String>> listInstallMedias(File androidDownloadDir){
-        List<Map<String, String>> installMedias = new ArrayList<Map<String, String>>();
+    public List<InstallMedia> listInstallMedias(File androidDownloadDir){
+        List<InstallMedia> installMedias = new ArrayList<InstallMedia>();
         if (tryMountCdrom()){
             File file = new File(cdromDevice);
-            Map<String, String> map = new HashMap<String, String>();
-            map.put("titre", "/dev/block/"+file.getName());
-            map.put("description", "removable media");
-            map.put("img", String.valueOf(R.drawable.ic_isofile));
+            InstallMedia installMedia = new InstallMedia("/dev/block/"+file.getName(),
+                        "removable media",
+                    R.drawable.ic_isofile);
 
-            installMedias.add(map);
+            installMedias.add(installMedia);
         }
         addIsoFiles(installMedias, androidDownloadDir);
         return installMedias;
     }
 
-    private void addIsoFiles(List<Map<String, String>> installMedias, File parentDirectory) {
+    private void addIsoFiles(List<InstallMedia> installMedias, File parentDirectory) {
         FilenameFilter isoFileFilter = new FilenameFilter() {
             public boolean accept(File dir, String name) {
                 if (name.toUpperCase().endsWith(".ISO")) {
@@ -49,12 +43,11 @@ public class InstallService {
 
         for (String isoFile : parentDirectory.list(isoFileFilter)) {
             File file = new File(isoFile);
-            Map<String, String> map = new HashMap<String, String>();
-            map.put("titre", file.getName());
-            map.put("description", parentDirectory.getPath());
-            map.put("img", String.valueOf(R.drawable.ic_isofile));
+            InstallMedia installMedia = new InstallMedia(file.getName(),
+                    parentDirectory.getPath(),
+                    R.drawable.ic_isofile);
 
-            installMedias.add(map);
+            installMedias.add(installMedia);
         }
     }
 

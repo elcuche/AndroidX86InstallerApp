@@ -8,23 +8,17 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.Environment;
 import android.support.v7.app.ActionBarActivity;
-import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
-import android.widget.ImageView;
 import android.widget.ListView;
-import android.widget.SimpleAdapter;
 
 import java.io.File;
-import java.io.FilenameFilter;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 
 public class MainActivity extends ActionBarActivity {
@@ -132,22 +126,22 @@ public class MainActivity extends ActionBarActivity {
         isoFileListView = (ListView) findViewById(R.id.isoFileslistView);
 
         InstallService installService = new InstallService();
-        final List<Map<String, String>> installMedias =
+        final List<InstallMedia> installMedias =
                 installService.listInstallMedias(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
 
-        SimpleAdapter isoFileItemAdapter = new SimpleAdapter(this.getBaseContext(),
-                installMedias,
-                R.layout.isofileitem, new String[]{"img", "titre", "description"},
-                new int[]{R.id.img, R.id.titre, R.id.description});
+        InstallMediaListViewAdapter isoFileItemAdapter = new InstallMediaListViewAdapter(this,
+                R.layout.isofileitem, R.id.title,
+                installMedias);
 
         isoFileListView.setAdapter(isoFileItemAdapter);
+        isoFileListView.setChoiceMode(ListView.CHOICE_MODE_SINGLE);
         isoFileListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             @SuppressWarnings("unchecked")
             public void onItemClick(AdapterView<?> adapterView, View view, int position, long id) {
-                Map<String, String> selectedIso = (Map<String, String>) adapterView.getItemAtPosition(position);
-                final String description = selectedIso.get("description");
-                final String titre = selectedIso.get("titre");
+                InstallMedia clickedItem = (InstallMedia) adapterView.getItemAtPosition(position);
+                final String description = clickedItem.getDescription();
+                final String titre = clickedItem.getTitle();
                 if (titre.toUpperCase().endsWith(".ISO")) {
                     localIsoURI = new File(description + File.separator + titre).getAbsolutePath();
                 }
@@ -155,7 +149,7 @@ public class MainActivity extends ActionBarActivity {
                     localIsoURI = titre;
                 }
 
-                adapterView.setSelected(true);
+                view.setSelected(true);
                 findViewById(R.id.install_on_disk_button).setEnabled(true);
             }
         });
