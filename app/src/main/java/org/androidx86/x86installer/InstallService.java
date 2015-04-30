@@ -103,8 +103,12 @@ public class InstallService {
         remountRootFsAsReadWrite();
         //mount -t iso9660 -o ro,loop /storage/sdcard0/Download/Android-x86-xx.iso
         tryUnmountInstallationMedia();
-        suCommand("losetup -d /dev/block/loop0", true);
-        suCommand("mount -t iso9660 -o ro,loop "+isoFile+" "+getCdrom());
+        suCommand("losetup -d /dev/block/loop3", true);
+        //suCommand("mount -t iso9660 -o ro,loop "+isoFile+" "+getCdrom());
+
+        //suCommand("mount -t iso9660 -o ro,loop=/dev/block "+isoFile+" "+getCdrom());
+        suCommand("losetup /dev/block/loop3 "+isoFile, true);
+        suCommand("mount -t iso9660 -o ro /dev/block/loop3 "+getCdrom());
     }
 
     public void tryUnmountInstallationMedia(){
@@ -113,6 +117,7 @@ public class InstallService {
 
     public void unmountInstallationMedia(){
         suCommand("umount "+getCdrom(), false);
+        suCommand("losetup -d /dev/block/loop3 ", true);
     }
 
     private String getBlockDevice(String partition){
@@ -151,18 +156,20 @@ public class InstallService {
         //losetup -f
         //losetup -d /dev/block/loop0
         suCommand("umount "+tmpDirectory, true);
-        suCommand("losetup -d /dev/block/loop0", true);
-        suCommand("losetup -d /dev/block/loop1", true);
+        //suCommand("losetup -d /dev/block/loop0", true);
+        //suCommand("losetup -d /dev/block/loop1", true);
+        suCommand("losetup /dev/block/loop2 "+installDirectory+"/system.sfs", true);
         //mount -t squashfs -o,loop /hd/system.sfs /hd/tmp
-        suCommand("mount -t squashfs -o,loop "+installDirectory+"/system.sfs "+tmpDirectory);
+        suCommand("mount -t squashfs /dev/block/loop2 "+tmpDirectory);
         suCommand("cp "+tmpDirectory+"/system.img "+installDirectory);
         suCommand("umount "+tmpDirectory);
-        suCommand("losetup -d /dev/block/loop0", true);
+        suCommand("losetup -d /dev/block/loop2", true);
 
-        suCommand("mount -t ext4 -o,loop "+installDirectory+"/system.img "+tmpDirectory);
+        suCommand("losetup /dev/block/loop2 "+installDirectory+"/system.img", true);
+        suCommand("mount -t ext4 /dev/block/loop2 "+tmpDirectory);
         suCommand("cp -R "+tmpDirectory+"/* "+systemDirectory);
         suCommand("umount "+tmpDirectory);
-        suCommand("losetup -d /dev/block/loop0", true);
+        suCommand("losetup -d /dev/block/loop2", true);
 
         suCommand("rm -Rf "+tmpDirectory);
         suCommand("rm -f "+installDirectory+"/system.sfs");
@@ -192,35 +199,13 @@ public class InstallService {
         suCommand("mke2fs -L AndroidX86 "+targetBlockDevice);
     }
 
-    public void copyGrubFilesOnPartition(AssetManager assetManager, File downloadDirectory, String targetPartition) {
-        //mkdir /hd/grub
-        suCommand("mkdir -p /hd/boot/grub");
-        //touch /hd/grub/menu.lst
-        suCommand("touch /hd//boot/grub/menu.lst");
-
-        //cp assets/* /hd/
-        File directory = new File(downloadDirectory+File.separator+"grub");
-        directory.mkdir();
-        extractAssetFileInDirectory(assetManager, directory, "e2fs_stage1_5");
-        extractAssetFileInDirectory(assetManager, directory, "fat_stage1_5");
-        extractAssetFileInDirectory(assetManager, directory, "ntfs_stage1_5");
-        extractAssetFileInDirectory(assetManager, directory, "stage1");
-        extractAssetFileInDirectory(assetManager, directory, "stage2");
-        //grub don't works as it need libc6 (would need as bionic build of grub...)
-        //extractAssetFileInDirectory(assetManager, directory, "grub");
-
-        //chmod a+x /hd/grub
-        suCommand("cp -R /sdcard/Download/grub/* /hd/boot/grub/");
-        //allow root to execute grub
-        suCommand("chmod 700 /hd/grub/grub");
-    }
-
     /**
      * @see 'http://en.wikipedia.org/wiki/GNU_GRUB'
      */
     public void copyGrub2FilesOnPartition(String androidDirectory, AssetManager assetManager, File downloadDirectory, DiskPartition targetPartition) {
         //mkdir /hd/grub
         suCommand("mkdir -p /hd/boot/grub");
+        suCommand("mkdir -p /hd/boot/grub/i386-pc");
 
         //cp assets/* /hd/
         File directory = new File(downloadDirectory+File.separator+"grub2");
@@ -239,27 +224,15 @@ public class InstallService {
         //Create menu in /boot/grub/grub.cfg
         createGrub2Menu(directory, targetPartition, androidDirectory);
 
-        suCommand("cp -R /sdcard/Download/grub2/* /hd/boot/grub/");
+        suCommand("cp -R /sdcard/Download/grub2/*.img /hd/boot/grub/");
+        suCommand("cp -R /sdcard/Download/grub2/*.cfg /hd/boot/grub/");
+        suCommand("cp -R /sdcard/Download/grub2/*.mod /hd/boot/grub/i386-pc");
         suCommand("mv /hd/boot/grub/bios-mbr-core.img /hd/boot/grub/core.img");
     }
 
 
     public void installBootloader(DiskPartition diskPartition) {
         installGrub2OnMBRDisk("/dev/block/"+diskPartition.getDisk().getDeviceBlockName());
-    }
-
-    /**
-     * Legacy-grub needs libc6.so to work.
-     * using dd to install stage1 on MBR may also work.
-     * Or use syslinux as stage1: https://wiki.archlinux.org/index.php/Syslinux
-     */
-    private void installLegacyGrub(){
-        //1. Run grub
-        //1.1 find /boot/grub/stage1 (optional)
-        //1.2 root (hdX,Y)
-        //1.3 setup (hd0)
-        //1.4 quit
-
     }
 
     /**
@@ -275,7 +248,7 @@ public class InstallService {
         suCommand("dd if=/hd/boot/grub/boot.img of="+blockDevice+" bs=446 count=1", true);
         //copy bios-mbr-core.img after partition table
         //dd if=bios-mbr-core.img of=/dev/block/sdb bs=512 seek=1 # seek=1 skips the first block (MBR)
-        suCommand("dd if=/hd/boot/grub/boot.img of="+blockDevice+" bs=446 count=1", true);
+        suCommand("dd if=/hd/boot/grub/core.img of="+blockDevice+" bs=512 seek=1", true);
     }
 
     /**
@@ -287,18 +260,6 @@ public class InstallService {
         //2.
     }
 
-    private void createGrubMenu(){
-        //Create menu.lst:
-        //title Windows 95/98/NT/2000
-        //root (hd0,0)
-        //makeactive
-        //chainloader +1
-
-        //title Linux
-        //root (hd0,1)
-        //kernel /vmlinuz root=/dev/hda3 ro
-    }
-
     private void createGrub2Menu(File directory, DiskPartition targetPartition, String androidDirectory){
         try {
             File grub2ConfFile = new File(directory, "grub.cfg");
@@ -306,16 +267,16 @@ public class InstallService {
                 grub2ConfFile.createNewFile();
             }
             FileWriter grub2Conf = new FileWriter(grub2ConfFile);
-            grub2Conf.append("insmod echo\n");
+            //grub2Conf.append("insmod echo\n");
             grub2Conf.append("set timeout = 5\n");
 
-            grub2Conf.append("menuentry \"test\" {\n");
-            grub2Conf.append("  echo \"hello\"\n");
-            grub2Conf.append("}\n");
+            //grub2Conf.append("menuentry \"test\" {\n");
+            //grub2Conf.append("  echo \"hello\"\n");
+            //grub2Conf.append("}\n");
 
 
             grub2Conf.append("menuentry \"Android-x86\" {\n");
-            grub2Conf.append("  set root=+"+targetPartition.getGrub2BiosMBRLabel()+"'\n");
+            grub2Conf.append("  set root=("+targetPartition.getGrub2BiosMBRLabel()+")\n");
             grub2Conf.append("  linux /"+androidDirectory+"/kernel quiet androidboot.hardware=android_x86 video=-16 SRC=/"+androidDirectory+"\n");
             grub2Conf.append("  initrd /"+androidDirectory+"/initrd.img"+"\n");
             grub2Conf.append("}\n");

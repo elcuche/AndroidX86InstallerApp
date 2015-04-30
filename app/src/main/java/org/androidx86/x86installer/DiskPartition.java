@@ -19,7 +19,9 @@ public class DiskPartition extends BlockDevice {
         //ASCII for a=97
         int diskNumber = Character.isDigit(diskNumberChar) ? Character.digit(diskNumberChar, 10) : ((int) diskNumberChar) - 96;
         int partitionNumber = Character.digit(getDeviceBlockName().charAt(getDeviceBlockName().length() - 1), 10);
-        return "'hd" + (diskNumber-1) + ",msdos" + partitionNumber;
+        //MBR partition table: hd0,msdos1
+        //GPT partition table: hd0,gpt1
+        return "hd" + (diskNumber-1) + ",msdos" + partitionNumber;
     }
 
     public static boolean isDiskPartition(String deviceBlockName){
