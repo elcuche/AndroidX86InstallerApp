@@ -220,6 +220,7 @@ public class InstallService {
         extractAssetFileInDirectory(assetManager, directory, "gettext.mod");
         extractAssetFileInDirectory(assetManager, directory, "normal.mod");
         extractAssetFileInDirectory(assetManager, directory, "terminal.mod");
+        extractAssetFileInDirectory(assetManager, directory, "echo.mod");
 
         //Create menu in /boot/grub/grub.cfg
         createGrub2Menu(directory, targetPartition, androidDirectory);
@@ -239,8 +240,17 @@ public class InstallService {
      * see http://pete.akeo.ie/2014/05/compiling-and-installing-grub2-for.html
      * to generate custom bios-mbr-core.img that boots other things than ntfs, exfat, btrfs, ext2.
      *
+     * 1. git clone git://git.savannah.gnu.org/grub.git
+     * 2. cd grub
+     * 3. ./autogen.sh
+     * 4. ./configure --disable-nls
+     * 5. make -j2
+     * 6. cd grub-core
+     *
      * I used for 'Bios-MBR-Table' bios-mbr-core.img:
-     * ../grub-mkimage -v -O i386-pc -d. -p\(hd0,msdos1\)/boot/grub biosdisk part_msdos fat ntfs exfat ext2 btrfs -o bios-mbr-core.img
+     * 7. ../grub-mkimage -v -O i386-pc -d. -p\(hd0,msdos1\)/boot/grub biosdisk part_msdos fat ntfs exfat ext2 btrfs -o bios-mbr-core.img
+     * 8. cp bios-mbr-core.img ~/AndroidStudioProjects/X86Installer/app/src/main/assets/bios-mbr-core.img
+     * 9. cp boot.img ~/AndroidStudioProjects/X86Installer/app/src/main/assets/boot.img
      */
     private void installGrub2OnMBRDisk(final String blockDevice){
         //copy boot.img on MBR (make sure that only the first 446 bytes of boot.img are copied, so as not to overwrites the partition data that also resides in the MBR and that has already been filled)
@@ -267,13 +277,12 @@ public class InstallService {
                 grub2ConfFile.createNewFile();
             }
             FileWriter grub2Conf = new FileWriter(grub2ConfFile);
-            //grub2Conf.append("insmod echo\n");
             grub2Conf.append("set timeout = 5\n");
 
-            //grub2Conf.append("menuentry \"test\" {\n");
-            //grub2Conf.append("  echo \"hello\"\n");
-            //grub2Conf.append("}\n");
-
+            grub2Conf.append("menuentry \"test\" {\n");
+            grub2Conf.append("  insmod echo\n");
+            grub2Conf.append("  echo \"hello\"\n");
+            grub2Conf.append("}\n");
 
             grub2Conf.append("menuentry \"Android-x86\" {\n");
             grub2Conf.append("  set root=("+targetPartition.getGrub2BiosMBRLabel()+")\n");
